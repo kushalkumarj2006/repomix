@@ -1,4 +1,4 @@
-const BACKEND_URL = "https://repomix.onrender.com";
+const BACKEND_URL = "https://repomix-v2.onrender.com";
 const defaultIgnorePatterns = `node_modules/
 .git/
 .DS_Store
