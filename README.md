@@ -590,5 +590,6 @@ MIT License — see [LICENSE](LICENSE) for details.
 **Repomix · Smart Repository Packer**
 
 [![GitHub](https://img.shields.io/badge/GitHub-100000?style=for-the-badge&logo=github&logoColor=white)](https://github.com/kushalkumarj2006/repomix)
+[![Render](https://img.shields.io/badge/Render-46E3B7?style=for-the-badge&logo=render&logoColor=white)](https://repomix-v2.onrender.com)
 
 </div>
