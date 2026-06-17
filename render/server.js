@@ -94,16 +94,16 @@ setInterval(() => {
 }, 60 * 60 * 1000); // Check every hour
 
 // ========== MIDDLEWARE ==========
-// ============================================
+// ================================
 // CORS CONFIGURATION
-// ============================================
+// ================================
 const allowedOrigins = [
     'https://kushalkumarj2006.github.io',
     'http://localhost:3000',
     'http://127.0.0.1:3000',
     'http://localhost:5500',
     'http://127.0.0.1:5500',
-    'https://colabbridge-jyba.onrender.com'
+    'https://repomix-v2.onrender.com'
 ];
 
 const corsOptions = {
