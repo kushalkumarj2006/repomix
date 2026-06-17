@@ -1,5 +1,10 @@
 # repomix · Smart Repository Packer
 
+[![License](https://img.shields.io/github/license/kushalkumarj2006/repomix)](https://github.com/kushalkumarj2006/repomix/blob/main/LICENSE)
+[![GitHub Pages](https://img.shields.io/badge/GitHub-Pages-blue)](https://kushalkumarj2006.github.io/repomix)
+[![Last Commit](https://img.shields.io/github/last-commit/kushalkumarj2006/repomix)](https://github.com/kushalkumarj2006/repomix/commits/main)
+[![Repo Size](https://img.shields.io/github/repo-size/kushalkumarj2006/repomix)](https://github.com/kushalkumarj2006/repomix)
+
 > A modern, intuitive web interface for analyzing GitHub repositories, selecting files, and generating compressed exports with smart ignore rules.
 
 ---
