@@ -1037,8 +1037,17 @@ app.post('/api/generate-zip', authenticate, async (req, res) => {
 
 // ========== HEALTH CHECK ==========
 app.get('/health', (req, res) => {
+  const startTime = process.uptime();
+  const minutes = Math.floor(startTime / 60);
+  const seconds = Math.floor(startTime % 60);
+  
   res.json({ 
-    status: 'alive', 
+    status: 'alive',
+    uptime: {
+      seconds: startTime,
+      minutes: minutes,
+      formatted: `${minutes}m ${seconds}s`
+    },
     compression: has7z ? '7z' : 'fallback',
     cacheSize: repoCache.size,
     auth: true,
@@ -1046,6 +1055,280 @@ app.get('/health', (req, res) => {
     maxSessions: MAX_SESSIONS
   });
 });
+
+// ========== FULL HEALTH CHECK (No Auth) ==========
+app.get('/health/full', async (req, res) => {
+  try {
+    const startTime = process.uptime();
+    const minutes = Math.floor(startTime / 60);
+    const seconds = Math.floor(startTime % 60);
+    const memoryUsage = process.memoryUsage();
+    
+    // Get detailed session information
+    const sessionDetails = Array.from(sessions.entries()).map(([id, session]) => {
+      const sessionAge = Date.now() - session.createdAt;
+      const sessionIdle = Date.now() - session.lastAccessed;
+      
+      // Calculate session directory size
+      let tempDirSize = 0;
+      if (fs.existsSync(session.tempDir)) {
+        const getDirSize = (dirPath) => {
+          let size = 0;
+          try {
+            const files = fs.readdirSync(dirPath);
+            for (const file of files) {
+              const filePath = path.join(dirPath, file);
+              const stats = fs.statSync(filePath);
+              if (stats.isDirectory()) {
+                size += getDirSize(filePath);
+              } else {
+                size += stats.size;
+              }
+            }
+          } catch (e) {
+            // Ignore errors
+          }
+          return size;
+        };
+        tempDirSize = getDirSize(session.tempDir);
+      }
+      
+      // Get file count in session directory
+      let fileCount = 0;
+      if (fs.existsSync(session.tempDir)) {
+        try {
+          const files = fs.readdirSync(session.tempDir);
+          fileCount = files.length;
+        } catch (e) {
+          // Ignore errors
+        }
+      }
+      
+      return {
+        id: id.substring(0, 16) + '...',
+        fullId: id,
+        createdAt: new Date(session.createdAt).toISOString(),
+        lastAccessed: new Date(session.lastAccessed).toISOString(),
+        age: {
+          milliseconds: sessionAge,
+          minutes: Math.floor(sessionAge / 60000),
+          seconds: Math.floor((sessionAge % 60000) / 1000),
+          formatted: `${Math.floor(sessionAge / 60000)}m ${Math.floor((sessionAge % 60000) / 1000)}s`
+        },
+        idle: {
+          milliseconds: sessionIdle,
+          minutes: Math.floor(sessionIdle / 60000),
+          seconds: Math.floor((sessionIdle % 60000) / 1000),
+          formatted: `${Math.floor(sessionIdle / 60000)}m ${Math.floor((sessionIdle % 60000) / 1000)}s`
+        },
+        tempDir: session.tempDir,
+        tempDirSize: tempDirSize,
+        tempDirSizeFormatted: formatBytes(tempDirSize),
+        fileCount: fileCount
+      };
+    });
+    
+    // Get cache details
+    const cacheDetails = Array.from(repoCache.entries()).map(([key, entry]) => {
+      const cacheAge = Date.now() - entry.timestamp;
+      const idleTime = Date.now() - entry.lastAccessed;
+      
+      // Calculate total file contents size
+      let contentsSize = 0;
+      if (entry.fileContents) {
+        for (const [_, content] of Object.entries(entry.fileContents)) {
+          contentsSize += content ? content.length : 0;
+        }
+      }
+      
+      return {
+        key: key,
+        repo: `${entry.owner}/${entry.repo}`,
+        branch: entry.branch,
+        repoId: entry.repoId,
+        fileCount: Object.keys(entry.fileTree).length,
+        totalSize: entry.totalSize,
+        totalSizeFormatted: formatBytes(entry.totalSize),
+        contentsSize: contentsSize,
+        contentsSizeFormatted: formatBytes(contentsSize),
+        cached: {
+          age: {
+            milliseconds: cacheAge,
+            minutes: Math.floor(cacheAge / 60000),
+            seconds: Math.floor((cacheAge % 60000) / 1000),
+            formatted: `${Math.floor(cacheAge / 60000)}m ${Math.floor((cacheAge % 60000) / 1000)}s`
+          },
+          idle: {
+            milliseconds: idleTime,
+            minutes: Math.floor(idleTime / 60000),
+            seconds: Math.floor((idleTime % 60000) / 1000),
+            formatted: `${Math.floor(idleTime / 60000)}m ${Math.floor((idleTime % 60000) / 1000)}s`
+          },
+          accessCount: entry.accessCount
+        }
+      };
+    });
+    
+    // Get system info
+    const systemInfo = {
+      nodeVersion: process.version,
+      platform: process.platform,
+      arch: process.arch,
+      cpus: require('os').cpus().length,
+      totalMemory: require('os').totalmem(),
+      totalMemoryFormatted: formatBytes(require('os').totalmem()),
+      freeMemory: require('os').freemem(),
+      freeMemoryFormatted: formatBytes(require('os').freemem()),
+      usedMemoryPercent: ((1 - require('os').freemem() / require('os').totalmem()) * 100).toFixed(1) + '%',
+      loadAverage: require('os').loadavg()
+    };
+    
+    // Test GitHub API access with first token
+    const token = getNextToken();
+    let githubStatus = 'No token available';
+    let githubRateLimit = null;
+    
+    if (token) {
+      try {
+        const ghResponse = await fetch('https://api.github.com/rate_limit', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/vnd.github.v3+json',
+            'User-Agent': 'Repomix-Backend'
+          }
+        });
+        if (ghResponse.ok) {
+          const ghData = await ghResponse.json();
+          githubStatus = 'OK';
+          githubRateLimit = {
+            limit: ghData.resources.core.limit,
+            remaining: ghData.resources.core.remaining,
+            used: ghData.resources.core.used,
+            resetTime: new Date(ghData.resources.core.reset * 1000).toISOString()
+          };
+        } else {
+          githubStatus = `Error: ${ghResponse.status}`;
+        }
+      } catch (err) {
+        githubStatus = `Failed: ${err.message}`;
+      }
+    }
+    
+    // Get directory stats
+    let tempRootStats = { size: 0, files: 0 };
+    const tempRoot = path.join(__dirname, 'temp');
+    if (fs.existsSync(tempRoot)) {
+      try {
+        const getDirStats = (dirPath) => {
+          let size = 0;
+          let count = 0;
+          try {
+            const items = fs.readdirSync(dirPath);
+            for (const item of items) {
+              const itemPath = path.join(dirPath, item);
+              const stats = fs.statSync(itemPath);
+              if (stats.isDirectory()) {
+                const subStats = getDirStats(itemPath);
+                size += subStats.size;
+                count += subStats.count;
+              } else {
+                size += stats.size;
+                count++;
+              }
+            }
+          } catch (e) {
+            // Ignore errors
+          }
+          return { size, count };
+        };
+        tempRootStats = getDirStats(tempRoot);
+      } catch (e) {
+        // Ignore errors
+      }
+    }
+    
+    res.json({
+      success: true,
+      timestamp: new Date().toISOString(),
+      server: {
+        uptime: {
+          seconds: startTime,
+          minutes: minutes,
+          formatted: `${minutes}m ${seconds}s`,
+          startTime: new Date(Date.now() - (startTime * 1000)).toISOString()
+        },
+        compression: has7z ? '7z' : 'fallback',
+        auth: true,
+        port: PORT,
+        environment: process.env.NODE_ENV || 'development'
+      },
+      memory: {
+        rss: memoryUsage.rss,
+        rssFormatted: formatBytes(memoryUsage.rss),
+        heapTotal: memoryUsage.heapTotal,
+        heapTotalFormatted: formatBytes(memoryUsage.heapTotal),
+        heapUsed: memoryUsage.heapUsed,
+        heapUsedFormatted: formatBytes(memoryUsage.heapUsed),
+        external: memoryUsage.external,
+        externalFormatted: formatBytes(memoryUsage.external),
+        arrayBuffers: memoryUsage.arrayBuffers,
+        arrayBuffersFormatted: formatBytes(memoryUsage.arrayBuffers),
+        heapUsagePercent: ((memoryUsage.heapUsed / memoryUsage.heapTotal) * 100).toFixed(1) + '%'
+      },
+      system: systemInfo,
+      sessions: {
+        active: sessions.size,
+        max: MAX_SESSIONS,
+        details: sessionDetails,
+        tempDirectory: {
+          path: tempRoot,
+          totalSize: tempRootStats.size,
+          totalSizeFormatted: formatBytes(tempRootStats.size),
+          fileCount: tempRootStats.count
+        }
+      },
+      cache: {
+        size: repoCache.size,
+        maxSize: MAX_CACHE_SIZE,
+        details: cacheDetails
+      },
+      github: {
+        tokenCount: TOKENS.length,
+        status: githubStatus,
+        rateLimit: githubRateLimit,
+        tokens: TOKENS.map((t, i) => ({
+          index: i + 1,
+          masked: t.slice(0, 8) + '....' + t.slice(-4),
+          length: t.length
+        }))
+      },
+      endpoints: [
+        { method: 'GET', path: '/health', auth: false },
+        { method: 'GET', path: '/health/full', auth: false },
+        { method: 'GET', path: '/test', auth: true },
+        { method: 'POST', path: '/api/analyze', auth: true },
+        { method: 'POST', path: '/api/generate-text', auth: true },
+        { method: 'POST', path: '/api/generate-zip', auth: true }
+      ]
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      success: false, 
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+});
+
+// Helper function for formatting bytes (not included in original file)
+function formatBytes(bytes) {
+  if (bytes === 0 || !bytes) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  const value = (bytes / Math.pow(k, i)).toFixed(1);
+  return value + ' ' + sizes[i];
+}
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
@@ -1057,4 +1340,6 @@ app.listen(PORT, () => {
   console.log(`📄 Text Preview: POST /api/generate-text (requires X-Auth-Key header)`);
   console.log(`📦 ZIP Download: POST /api/generate-zip (requires X-Auth-Key header)`);
   console.log(`🧪 Test endpoint: GET /test (requires X-Auth-Key header)`);
+  console.log(`❤️ Health check: GET /health (public)`);
+  console.log(`📊 Full health: GET /health/full (public)`);
 });
