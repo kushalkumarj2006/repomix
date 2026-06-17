@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <link rel="icon" type="image/x-icon" href="favicon.ico?v=2">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Repomix · Smart Repository Packer</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1>📦 Repomix</h1>
+    <p>Analyze repository, select files, preview or download compressed</p>
+  </div>
+  <div class="main-grid">
+    <div class="card">
+      <h2>🎯 Step 1: Source & Analysis</h2>
+      <div class="source-grid">
+        <button id="btnGithub" class="source-btn active">🐙 GitHub (Backend)</button>
+        <button id="btnLocal" class="source-btn">📁 Local Folder</button>
+        <button id="btnZip" class="source-btn">🗜️ ZIP Archive</button>
+      </div>
+      <div id="githubBlock">
+        <div class="input-group">
+          <label>GitHub Repository</label>
+          <div class="flex-row">
+            <input type="text" id="repoUrl" placeholder="owner/repo or full URL" />
+            <button id="analyzeBtn" class="primary">🔍 Analyze Repository</button>
+          </div>
+        </div>
+      </div>
+      <div id="localBlock" style="display: none">
+        <div class="input-group">
+          <label>📂 Select Local Folder</label>
+          <input type="file" id="folderPicker" webkitdirectory directory multiple />
+        </div>
+      </div>
+      <div id="zipBlock" style="display: none">
+        <div class="input-group">
+          <label>📦 Upload ZIP File</label>
+          <input type="file" id="zipUpload" accept=".zip,.ZIP" />
+        </div>
+      </div>
+      <hr />
+      <h2>🚫 Step 2: Ignore Rules</h2>
+      <div class="ignore-area">
+        <textarea id="ignorePatterns" rows="4" placeholder="node_modules/
+.git/
+.DS_Store
+dist/
+build/
+coverage/
+*.min.js
+__pycache__/
+.env
+.vscode/
+.idea/
+package-lock.json
+yarn.lock
+*.log
+*.tmp
+*.zip
+*.tar
+*.gz
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.ico
+*.svg
+*.mp4
+*.webm
+*.mp3
+*.wav
+*.pdf
+*.doc
+*.docx
+*.exe
+*.dll
+*.so
+*.bin
+*.db"></textarea>
+      </div>
+      <h2>⚙️ Step 3: Output Options</h2>
+      <div class="options-panel">
+        <div class="checkbox-group">
+          <input type="checkbox" id="includeDirectoryStructure" checked />
+          <label>📁 Include Directory Structure (show file tree)</label>
+        </div>
+        <div class="checkbox-group">
+          <input type="checkbox" id="showLineNumbers" />
+          <label>🔢 Show Line Numbers (for preview)</label>
+        </div>
+        <div class="checkbox-group">
+          <input type="checkbox" id="removeComments" />
+          <label>💬 Remove Comments (from code files)</label>
+        </div>
+        <div class="checkbox-group">
+          <input type="checkbox" id="removeEmptyLines" />
+          <label>📏 Remove Empty Lines (clean output)</label>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>📊 Analysis Results</h2>
+      <div id="analysisPanel" style="display: none">
+        <div class="analysis-stats">
+          <div class="analysis-stat">
+            <div class="analysis-stat-value" id="totalFilesFound">0</div>
+            <div class="analysis-stat-label">Total Files</div>
+          </div>
+          <div class="analysis-stat">
+            <div class="analysis-stat-value" id="totalSizeFound">0</div>
+            <div class="analysis-stat-label">Total Size</div>
+          </div>
+          <div class="analysis-stat">
+            <div class="analysis-stat-value" id="cacheStatus">-</div>
+            <div class="analysis-stat-label">Cache Status</div>
+          </div>
+        </div>
+        <div id="analysisDetails" style="font-size: 0.75rem; color: #10b981; text-align: center"></div>
+      </div>
+      <h2>🌲 Step 4: Select Files</h2>
+      <div class="file-tree-header">
+        <div class="selection-stats" id="selectionStats">📊 0 files selected (0 KB)</div>
+        <div>
+          <button id="expandAllBtn" style="padding: 4px 10px; font-size: 0.7rem">📂 Expand All</button>
+          <button id="collapseAllBtn" style="padding: 4px 10px; font-size: 0.7rem">📁 Collapse All</button>
+        </div>
+      </div>
+      <div class="file-tree-container" id="fileTreeContainer">
+        <div style="color: #64748b; text-align: center; padding: 40px">🔍 Enter a GitHub repo and click "Analyze Repository"</div>
+      </div>
+      <div class="stats-bar">
+        <div class="stat">
+          <div class="stat-value" id="selectedCount">0</div>
+          <div class="stat-label">Selected Files</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value" id="selectedSize">0</div>
+          <div class="stat-label">Text Size (KB)</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value" id="estimatedZipSize">0</div>
+          <div class="stat-label">Est. ZIP Size (KB)</div>
+        </div>
+      </div>
+      <div class="action-buttons">
+        <button id="previewBtn" class="success" disabled>📄 Generate & Preview (7z)</button>
+        <button id="downloadZipBtn" class="primary download-zip-btn" disabled>📦 Download ZIP</button>
+        <button id="resetBtn" class="secondary">⟳ Reset</button>
+      </div>
+      <div id="statusMsg" class="status"></div>
+      <div id="outputContainer" style="display: none">
+        <div class="output-header">
+          <h2>📄 Text Preview</h2>
+          <div class="output-actions">
+            <button id="downloadTextBtn" class="download-text-btn">💾 Save as Text</button>
+            <button id="copyOutputBtn" class="copy-btn">📋 Copy</button>
+          </div>
+        </div>
+        <pre id="output">—</pre>
+      </div>
+      <progress id="progressBar" value="0" max="100"></progress>
+    </div>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
+<script src="script.js"></script>
+</body>
+</html>
