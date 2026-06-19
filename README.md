@@ -134,38 +134,51 @@ sequenceDiagram
     participant UI as Repomix UI
     participant API as Repomix API
     participant GitHub as GitHub API
+    participant Cache as Redis Cache
 
-    User->>UI: Enter repo URL
+    User->>UI: Enter repo URL + token (optional)
     User->>UI: Click "Analyze"
     UI->>API: POST /api/analyze
-    API->>API: Check cache
+    
+    API->>Cache: Check cache by repo URL & commit hash
+    
     alt Cache Hit
-        API-->>UI: Cached file tree
+        Cache-->>API: Cached file tree
+        API-->>UI: File tree (cached)
     else Cache Miss
-        API->>GitHub: Fetch repo ZIP
-        GitHub-->>API: ZIP file
-        API->>API: Extract & process
-        API->>API: Apply ignore rules
-        API->>API: Cache results
-        API-->>UI: File tree
+        API->>GitHub: Fetch repo ZIP (with token)
+        
+        alt Success
+            GitHub-->>API: ZIP file
+            API->>API: Extract files
+            API->>API: Apply ignore rules (.gitignore, .repomixignore)
+            API->>Cache: Store results (TTL: 1 hour)
+            API-->>UI: File tree
+        else Error
+            GitHub-->>API: 404/403/rate limit
+            API-->>UI: Error message
+        end
     end
-    UI->>UI: Display file tree
-
+    
+    UI->>UI: Display file tree with checkboxes
+    
     User->>UI: Select/deselect files
-    User->>UI: Configure options
+    User->>UI: Configure options (format, compression)
     User->>UI: Click "Preview"
     UI->>API: POST /api/generate-text
-    API->>API: Generate 7z archive
-    API-->>UI: Compressed archive
-    UI->>UI: Decompress & display
-
+    
+    API->>API: Generate compressed text (7z)
+    API-->>UI: Compressed archive (base64)
+    UI->>UI: Decompress & render preview
+    
     User->>UI: Click "Download ZIP"
     UI->>API: POST /api/generate-zip
-    API->>API: Generate ZIP archive
-    API-->>UI: ZIP file
-    UI->>User: Download
-
-    Note over API: Session cleanup after idle
+    
+    API->>API: Generate ZIP from selected files
+    API-->>UI: ZIP file (binary)
+    UI->>User: Download prompt
+    
+    Note over API: Session cleanup after 30min idle
 ```
 
 ---
