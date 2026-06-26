@@ -675,6 +675,7 @@ app.post('/api/analyze', authenticate, async (req, res) => {
   console.log(`🚫 Ignore patterns: ${ignorePatterns.length ? ignorePatterns.join(', ') : 'none'}`);
   
   try {
+    repoCache.clear(); //To avoid caching
     const cached = getFromCache(owner, repo, branch);
     
     if (cached) {
